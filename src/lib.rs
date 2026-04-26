@@ -17,6 +17,34 @@ mod download;
 mod query;
 mod world;
 
+#[cfg(target_arch = "wasm32")]
+fn initialize_rayon_for_wasm() -> PyResult<()> {
+    use std::sync::OnceLock;
+
+    static RAYON_INIT: OnceLock<Result<(), String>> = OnceLock::new();
+
+    let result = RAYON_INIT.get_or_init(|| {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(1)
+            .use_current_thread()
+            .build_global()
+            .map_err(|err| err.to_string())
+    });
+
+    match result {
+        Ok(()) => Ok(()),
+        Err(message) if message == "The global thread pool has already been initialized." => Ok(()),
+        Err(message) => Err(PyRuntimeError::new_err(format!(
+            "failed to initialize Rayon for wasm: {message}"
+        ))),
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn initialize_rayon_for_wasm() -> PyResult<()> {
+    Ok(())
+}
+
 // Create custom exceptions that inherit from RuntimeError
 create_exception!(typst, TypstError, PyRuntimeError);
 
@@ -834,6 +862,7 @@ mod _typst {
 
     #[pymodule_init]
     fn init(m: &pyo3::Bound<'_, pyo3::types::PyModule>) -> pyo3::PyResult<()> {
+        super::initialize_rayon_for_wasm()?;
         m.add("__version__", env!("CARGO_PKG_VERSION"))?;
         Ok(())
     }

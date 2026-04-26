@@ -1,0 +1,26 @@
+name: Sync upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Mirror upstream/main into upstream-main
+        run: |
+          git remote add upstream https://github.com/messense/typst-py.git
+          git fetch upstream main
+          git push origin refs/remotes/upstream/main:refs/heads/upstream-main --force-with-lease
